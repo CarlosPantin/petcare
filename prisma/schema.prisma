@@ -1,0 +1,144 @@
+// Prisma schema for PetCare
+// docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Used only for migrations/db push, which must bypass Supabase's
+  // connection pooler. Runtime queries use the pooled DATABASE_URL above.
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------- Auth (NextAuth) ----------
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ---------- Core domain ----------
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  hashedPassword String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  accounts Account[]
+  sessions Session[]
+  pets     Pet[]
+}
+
+enum Species {
+  DOG
+  CAT
+  BIRD
+  RABBIT
+  REPTILE
+  OTHER
+}
+
+model Pet {
+  id              String   @id @default(cuid())
+  userId          String
+  name            String
+  species         Species
+  breed           String?
+  birthdate       DateTime?
+  weightKg        Float?
+  microchipNumber String?
+  avatarUrl       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  medicalRecords  MedicalRecord[]
+  reminders       Reminder[]
+
+  @@index([userId])
+}
+
+enum RecordType {
+  VACCINE
+  VISIT
+  EXAM
+}
+
+model MedicalRecord {
+  id          String     @id @default(cuid())
+  petId       String
+  recordType  RecordType
+  date        DateTime
+  notes       String?    @db.Text
+  fileUrl     String?
+  clinicName  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pet Pet @relation(fields: [petId], references: [id], onDelete: Cascade)
+
+  @@index([petId])
+}
+
+enum ReminderStatus {
+  PENDING
+  COMPLETED
+}
+
+model Reminder {
+  id          String         @id @default(cuid())
+  petId       String
+  taskName    String
+  dueDate     DateTime
+  isRecurring Boolean        @default(false)
+  status      ReminderStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pet Pet @relation(fields: [petId], references: [id], onDelete: Cascade)
+
+  @@index([petId])
+  @@index([dueDate])
+}
